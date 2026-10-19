@@ -3,11 +3,25 @@ import { empresasDelUsuario, requerirRol } from "@/lib/auth";
 import { crearClienteServidor } from "@/lib/supabase/server";
 import { mesAnterior } from "@/lib/cargas/validacion";
 import { formatearFechaHora, formatearPeriodoCorto } from "@/lib/formato";
+import type { Json } from "@/lib/supabase/tipos";
 import { FormularioCarga, type TipoOpcion } from "./formulario-carga";
 
 export const metadata: Metadata = { title: "Cargas" };
 
 type EstadoCarga = "procesando" | "aceptada" | "rechazada";
+
+type CheckGuardado = { codigo: string; ok: boolean; nivel: "error" | "aviso"; mensaje: string };
+
+/** `resultado_checks` es jsonb; se lee a la defensiva. */
+function leerChecks(json: Json): CheckGuardado[] {
+  if (!Array.isArray(json)) return [];
+  return json.flatMap((c) => {
+    if (!c || typeof c !== "object" || Array.isArray(c)) return [];
+    const o = c as Record<string, Json | undefined>;
+    if (typeof o.codigo !== "string" || typeof o.mensaje !== "string") return [];
+    return [{ codigo: o.codigo, ok: o.ok === true, nivel: o.nivel === "error" ? "error" : "aviso", mensaje: o.mensaje }];
+  });
+}
 
 const ESTADO: Record<EstadoCarga, { texto: string; clase: string }> = {
   procesando: { texto: "En revisión", clase: "bg-azul/10 text-azul" },
@@ -31,7 +45,7 @@ export default async function PaginaCargas() {
     supabase
       .from("cargas")
       .select(
-        "id, periodo, version, vigente, estado, caracter, nombre_archivo, motivo_rechazo, subido_en, empresas(nombre, es_demo), tipos_archivo(nombre)",
+        "id, periodo, version, vigente, estado, caracter, nombre_archivo, motivo_rechazo, resultado_checks, subido_en, empresas(nombre, es_demo), tipos_archivo(nombre)",
       )
       .order("subido_en", { ascending: false })
       .limit(50),
@@ -78,6 +92,7 @@ export default async function PaginaCargas() {
                 <tbody>
                   {cargas.map((c) => {
                     const estado = ESTADO[c.estado];
+                    const avisos = leerChecks(c.resultado_checks).filter((x) => x.nivel === "aviso");
                     return (
                       <tr key={c.id} className={"border-b border-gris-borde/70 align-top" + (c.vigente ? "" : " text-gris-texto")}>
                         <td className="py-2.5 pr-3">
@@ -97,13 +112,25 @@ export default async function PaginaCargas() {
                         <td className="py-2.5 pr-3 whitespace-nowrap">{formatearPeriodoCorto(c.periodo)}</td>
                         <td className="py-2.5 pr-3 whitespace-nowrap">
                           v{c.version}
-                          {c.vigente ? "" : <span className="ml-1 text-xs">(reemplazada)</span>}
+                          {!c.vigente && c.estado !== "rechazada" ? <span className="ml-1 text-xs">(reemplazada)</span> : null}
                         </td>
                         <td className="py-2.5 pr-3 capitalize">{c.caracter}</td>
                         <td className="py-2.5 pr-3">
                           <span className={`inline-block rounded px-2 py-0.5 text-xs font-semibold ${estado.clase}`}>{estado.texto}</span>
                           {c.estado === "rechazada" && c.motivo_rechazo ? (
-                            <p className="mt-1 max-w-[260px] text-xs text-rojo">{c.motivo_rechazo}</p>
+                            <p className="mt-1 max-w-[320px] text-xs text-rojo">{c.motivo_rechazo}</p>
+                          ) : null}
+                          {avisos.length > 0 ? (
+                            <details className="mt-1 max-w-[320px] text-xs text-gris-texto">
+                              <summary className="cursor-pointer select-none">
+                                {avisos.length} {avisos.length === 1 ? "aviso" : "avisos"}
+                              </summary>
+                              <ul className="mt-1 list-disc space-y-1 pl-4">
+                                {avisos.map((a, i) => (
+                                  <li key={`${a.codigo}-${i}`}>{a.mensaje}</li>
+                                ))}
+                              </ul>
+                            </details>
                           ) : null}
                         </td>
                         <td className="py-2.5 whitespace-nowrap text-gris-texto">{formatearFechaHora(c.subido_en)}</td>

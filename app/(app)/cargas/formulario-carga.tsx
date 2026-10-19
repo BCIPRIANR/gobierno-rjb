@@ -8,7 +8,7 @@ import { subirArchivo, type EstadoSubida } from "./acciones";
 export type EmpresaOpcion = { id: string; nombre: string; es_demo: boolean };
 export type TipoOpcion = { codigo: string; nombre: string; periodicidad: "mensual" | "anual"; obligatorio: boolean };
 
-const estadoInicial: EstadoSubida = { ok: false, mensaje: null };
+const estadoInicial: EstadoSubida = { tipo: null, mensaje: null };
 
 const claseCampo =
   "h-11 w-full rounded-md border border-gris-borde bg-white px-3 text-base text-navy outline-none focus:border-azul focus:ring-2 focus:ring-azul/20";
@@ -28,7 +28,7 @@ export function FormularioCarga({
 
   const [estado, accion, enviando] = useActionState(async (anterior: EstadoSubida, datos: FormData) => {
     const resultado = await subirArchivo(anterior, datos);
-    if (resultado.ok) {
+    if (resultado.tipo === "exito") {
       // Limpia el formulario tras una carga exitosa (fuera de un efecto).
       formRef.current?.reset();
       setArchivo(null);
@@ -121,9 +121,9 @@ export function FormularioCarga({
 
       {estado.mensaje ? (
         <p
-          role={estado.ok ? "status" : "alert"}
+          role={estado.tipo === "exito" ? "status" : "alert"}
           className={
-            estado.ok
+            estado.tipo === "exito"
               ? "rounded-md border border-turquesa/40 bg-turquesa/5 px-3 py-2 text-sm text-navy"
               : "rounded-md border border-rojo/30 bg-rojo/5 px-3 py-2 text-sm text-rojo"
           }

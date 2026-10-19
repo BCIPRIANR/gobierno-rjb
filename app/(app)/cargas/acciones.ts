@@ -6,21 +6,24 @@ import { crearClienteServidor } from "@/lib/supabase/server";
 import { crearClienteAdmin } from "@/lib/supabase/admin";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { calcularSha256 } from "@/lib/cargas/hash";
+import { procesarCarga } from "@/lib/cargas/procesar";
 import { esquemaCarga, MIME_XLSX, rutaStorage, validarArchivoXlsx } from "@/lib/cargas/validacion";
+import { NOMBRE_MES } from "@/lib/parser/texto";
 
 export type EstadoSubida = {
-  ok: boolean;
+  /** `exito`: aceptada o recibida · `rechazo`: el archivo no pasó los checks · `error`: fallo de validación o del sistema */
+  tipo: "exito" | "rechazo" | "error" | null;
   mensaje: string | null;
 };
 
 function falla(mensaje: string): EstadoSubida {
-  return { ok: false, mensaje };
+  return { tipo: "error", mensaje };
 }
 
 /**
- * Recibe un .xlsx del contador y crea una carga en estado `procesando`.
+ * Recibe un .xlsx del contador, lo guarda y lo revisa automáticamente.
  * Orden: sesión → campos (zod) → archivo → permiso (puede_cargar) → hash →
- * Storage → fila en `cargas` → versiones anteriores no vigentes → auditoría.
+ * Storage → fila en `cargas` (procesando) → parser + checks → aceptada/rechazada → auditoría.
  * Toda escritura usa el cliente service_role después de verificar permiso.
  */
 export async function subirArchivo(_anterior: EstadoSubida, formData: FormData): Promise<EstadoSubida> {
@@ -65,11 +68,7 @@ export async function subirArchivo(_anterior: EstadoSubida, formData: FormData):
     return falla("No tienes permiso para cargar archivos de esta empresa.");
   }
 
-  const { data: tipo } = await admin
-    .from("tipos_archivo")
-    .select("codigo")
-    .eq("codigo", tipo_archivo)
-    .maybeSingle();
+  const { data: tipo } = await admin.from("tipos_archivo").select("codigo").eq("codigo", tipo_archivo).maybeSingle();
   if (!tipo) {
     return falla("El tipo de archivo elegido no existe. Recarga la página e intenta de nuevo.");
   }
@@ -101,7 +100,7 @@ export async function subirArchivo(_anterior: EstadoSubida, formData: FormData):
     return falla("No se pudo guardar el archivo. Intenta de nuevo en un momento.");
   }
 
-  // 8. Fila en cargas (procesando). Los checks del Bloque 3 la pasan a aceptada/rechazada.
+  // 8. Fila en cargas (procesando)
   const { error: errorInsert } = await admin.from("cargas").insert({
     id,
     empresa_id,
@@ -122,8 +121,8 @@ export async function subirArchivo(_anterior: EstadoSubida, formData: FormData):
     return falla("No se pudo registrar la carga. Intenta de nuevo en un momento.");
   }
 
-  // 9. Versiones anteriores dejan de ser vigentes. Nada se borra.
-  await marcarAnterioresNoVigentes(admin, { empresa_id, tipo_archivo, periodo, idActual: id });
+  // 9. Parser + checks → aceptada / rechazada. Si es aceptada, la versión anterior deja de ser vigente.
+  const resultado = await procesarCarga(admin, { id, empresa_id, tipo_archivo, periodo }, contenido);
 
   // 10. Auditoría (sin cifras ni datos personales)
   await registrarAuditoria({
@@ -131,32 +130,26 @@ export async function subirArchivo(_anterior: EstadoSubida, formData: FormData):
     accion: "subir_carga",
     entidad: "cargas",
     entidadId: id,
-    detalle: { empresa_id, tipo_archivo, periodo, version, caracter, tamano_bytes: archivo.size },
+    detalle: { empresa_id, tipo_archivo, periodo, version, caracter, tamano_bytes: archivo.size, estado: resultado.estado },
   });
 
   revalidatePath("/cargas");
-  return {
-    ok: true,
-    mensaje:
-      version === 1
-        ? "Archivo recibido. Quedó en revisión automática."
-        : `Archivo recibido como versión ${version}. La versión anterior ya no está vigente.`,
-  };
-}
 
-async function marcarAnterioresNoVigentes(
-  admin: ReturnType<typeof crearClienteAdmin>,
-  c: { empresa_id: string; tipo_archivo: string; periodo: string; idActual: string },
-) {
-  const { error } = await admin
-    .from("cargas")
-    .update({ vigente: false })
-    .eq("empresa_id", c.empresa_id)
-    .eq("tipo_archivo", c.tipo_archivo)
-    .eq("periodo", c.periodo)
-    .neq("id", c.idActual)
-    .eq("vigente", true);
-  if (error) {
-    console.error("[cargas] no se pudo marcar versiones anteriores", error.code);
+  switch (resultado.estado) {
+    case "aceptada": {
+      const mes = resultado.ultimoMes ? NOMBRE_MES[resultado.ultimoMes] : null;
+      const avisos = resultado.avisos > 0 ? ` Hay ${resultado.avisos} ${resultado.avisos === 1 ? "aviso" : "avisos"} en el historial.` : "";
+      const reemplazo = version > 1 ? ` Reemplaza a la versión ${version - 1}.` : "";
+      return {
+        tipo: "exito",
+        mensaje: `Archivo aceptado: ${resultado.hechos.toLocaleString("es-CO")} valores registrados${mes ? `, datos hasta ${mes}` : ""}.${reemplazo}${avisos}`,
+      };
+    }
+    case "rechazada":
+      return { tipo: "rechazo", mensaje: `Archivo rechazado. ${resultado.motivo}` };
+    case "procesando":
+      return { tipo: "exito", mensaje: resultado.mensaje };
+    case "error":
+      return falla(resultado.mensaje);
   }
 }
