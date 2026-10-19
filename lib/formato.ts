@@ -50,3 +50,64 @@ export function formatearTamano(bytes: number): string {
   if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${bytes} B`;
 }
+
+// ---------------------------------------------------------------------------
+// Cifras (CLAUDE.md › Formatos): miles con `.`, decimal con `,`.
+// ---------------------------------------------------------------------------
+
+const numero1 = new Intl.NumberFormat("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const numero2 = new Intl.NumberFormat("es-CO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const entero = new Intl.NumberFormat("es-CO", { maximumFractionDigits: 0 });
+
+/** Pesos completos → `$5.846,0 M` (COP millones). Negativo: `-$1.056,1 M`. */
+export function formatearCOPMillones(pesos: number): string {
+  const signo = pesos < 0 ? "-" : "";
+  return `${signo}$${numero1.format(Math.abs(pesos) / 1_000_000)} M`;
+}
+
+/** Fracción (0,433) → `43,3%`. */
+export function formatearPorcentaje(fraccion: number): string {
+  return `${numero1.format(fraccion * 100)}%`;
+}
+
+/** Diferencia de fracciones (0,021) → `+2,1 p.p.`. */
+export function formatearPuntosPorcentuales(delta: number): string {
+  const signo = delta > 0 ? "+" : "";
+  return `${signo}${numero1.format(delta * 100)} p.p.`;
+}
+
+/** Variación relativa (0,123) → `+12,3%`. */
+export function formatearVariacion(fraccion: number): string {
+  const signo = fraccion > 0 ? "+" : "";
+  return `${signo}${numero1.format(fraccion * 100)}%`;
+}
+
+export function formatearRatio(x: number): string {
+  return `${numero2.format(x)}x`;
+}
+
+export function formatearDias(n: number): string {
+  return `${entero.format(Math.round(n))} días`;
+}
+
+export function formatearEntero(n: number): string {
+  return entero.format(n);
+}
+
+export type UnidadKpi = "cop" | "pct" | "x" | "dias" | "personas";
+
+/** Formato de un valor según la unidad del KPI. */
+export function formatearValorKpi(valor: number, unidad: UnidadKpi): string {
+  switch (unidad) {
+    case "cop":
+      return formatearCOPMillones(valor);
+    case "pct":
+      return formatearPorcentaje(valor);
+    case "x":
+      return formatearRatio(valor);
+    case "dias":
+      return formatearDias(valor);
+    case "personas":
+      return formatearEntero(valor);
+  }
+}

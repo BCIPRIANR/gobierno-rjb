@@ -6,6 +6,7 @@ import { parsearInformesMulti } from "@/lib/parser/informes-multi";
 import { evaluarInformesMulti } from "@/lib/checks/informes-multi";
 import type { ResultadoCheck } from "@/lib/checks/tipos";
 import type { Hecho } from "@/lib/parser/tipos";
+import { calcularYGuardarKpis } from "@/lib/kpi/guardar";
 
 type Admin = SupabaseClient<Database>;
 
@@ -18,7 +19,7 @@ export type CargaAProcesar = {
 };
 
 export type ResultadoProceso =
-  | { estado: "aceptada"; hechos: number; avisos: number; ultimoMes: number | null }
+  | { estado: "aceptada"; hechos: number; avisos: number; ultimoMes: number | null; kpis: number; kpisNd: number; avisoKpi: string | null }
   | { estado: "rechazada"; motivo: string }
   | { estado: "procesando"; mensaje: string }
   | { estado: "error"; mensaje: string };
@@ -88,22 +89,30 @@ export async function procesarCarga(admin: Admin, carga: CargaAProcesar, conteni
     }
   }
 
-  // 5. Aceptada: la versión anterior deja de ser vigente (nada se borra).
+  // 5. Aceptada. Primero la versión anterior deja de ser vigente (nada se borra): el índice
+  //    `cargas_una_vigente` solo admite una carga aceptada y vigente por empresa/tipo/periodo.
+  await marcarAnterioresNoVigentes(admin, carga);
   const { error: errorEstado } = await admin
     .from("cargas")
     .update({ estado: "aceptada", resultado_checks: evaluacion.checks, motivo_rechazo: null })
     .eq("id", carga.id);
   if (errorEstado) {
     console.error("[cargas] fallo al marcar aceptada", errorEstado.code);
+    await admin.from("hechos_financieros").delete().eq("carga_id", carga.id);
     return { estado: "error", mensaje: "No se pudo actualizar el estado de la carga. Intenta de nuevo." };
   }
-  await marcarAnterioresNoVigentes(admin, carga);
+
+  // 6. KPI de todos los meses de la carga. Un fallo aquí no revierte la aceptación: se avisa.
+  const kpi = await calcularYGuardarKpis(admin, { id: carga.id, empresa_id: carga.empresa_id });
 
   return {
     estado: "aceptada",
     hechos: filas.length,
     avisos: evaluacion.checks.filter((c) => c.nivel === "aviso").length,
     ultimoMes: evaluacion.ultimoMesDatos,
+    kpis: kpi.ok ? kpi.resultados : 0,
+    kpisNd: kpi.ok ? kpi.nd : 0,
+    avisoKpi: kpi.ok ? null : kpi.mensaje,
   };
 }
 

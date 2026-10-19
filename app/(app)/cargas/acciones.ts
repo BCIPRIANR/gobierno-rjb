@@ -140,9 +140,12 @@ export async function subirArchivo(_anterior: EstadoSubida, formData: FormData):
       const mes = resultado.ultimoMes ? NOMBRE_MES[resultado.ultimoMes] : null;
       const avisos = resultado.avisos > 0 ? ` Hay ${resultado.avisos} ${resultado.avisos === 1 ? "aviso" : "avisos"} en el historial.` : "";
       const reemplazo = version > 1 ? ` Reemplaza a la versión ${version - 1}.` : "";
+      const kpis = resultado.avisoKpi
+        ? ` ${resultado.avisoKpi}`
+        : ` KPI calculados: ${resultado.kpis}${resultado.kpisNd > 0 ? ` (${resultado.kpisNd} en N/D por datos faltantes)` : ""}.`;
       return {
         tipo: "exito",
-        mensaje: `Archivo aceptado: ${resultado.hechos.toLocaleString("es-CO")} valores registrados${mes ? `, datos hasta ${mes}` : ""}.${reemplazo}${avisos}`,
+        mensaje: `Archivo aceptado: ${resultado.hechos.toLocaleString("es-CO")} valores registrados${mes ? `, datos hasta ${mes}` : ""}.${reemplazo}${kpis}${avisos}`,
       };
     }
     case "rechazada":
