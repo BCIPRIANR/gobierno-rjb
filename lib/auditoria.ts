@@ -9,7 +9,8 @@ export type AccionAuditoria =
   | "subir_carga"
   | "ver_tablero"
   | "consulta_chat"
-  | "cambio_configuracion";
+  | "cambio_configuracion"
+  | "enviar_recordatorios";
 
 type RegistroAuditoria = {
   usuarioId: string | null;

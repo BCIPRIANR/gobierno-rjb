@@ -7,6 +7,7 @@ import { evaluarInformesMulti } from "@/lib/checks/informes-multi";
 import type { ResultadoCheck } from "@/lib/checks/tipos";
 import type { Hecho } from "@/lib/parser/tipos";
 import { calcularYGuardarKpis } from "@/lib/kpi/guardar";
+import { avisarResultadoCarga } from "@/lib/notificaciones/eventos";
 
 type Admin = SupabaseClient<Database>;
 
@@ -47,6 +48,7 @@ export async function procesarCarga(admin: Admin, carga: CargaAProcesar, conteni
   } catch (e) {
     const motivo = `No se pudo leer el archivo como libro de Excel (${e instanceof Error ? e.message : "error desconocido"}). Guárdalo de nuevo como .xlsx e intenta otra vez.`;
     await rechazar(admin, carga.id, motivo, [{ codigo: "archivo_legible", ok: false, nivel: "error", mensaje: motivo }]);
+    await avisarResultadoCarga(admin, carga.id);
     return { estado: "rechazada", motivo };
   }
 
@@ -54,6 +56,7 @@ export async function procesarCarga(admin: Admin, carga: CargaAProcesar, conteni
   const evaluacion = evaluarInformesMulti(parser, carga.periodo);
   if (evaluacion.estado === "rechazada") {
     await rechazar(admin, carga.id, evaluacion.motivoRechazo ?? "Rechazada por los controles automáticos.", evaluacion.checks);
+    await avisarResultadoCarga(admin, carga.id);
     return { estado: "rechazada", motivo: evaluacion.motivoRechazo ?? "" };
   }
 
@@ -104,6 +107,9 @@ export async function procesarCarga(admin: Admin, carga: CargaAProcesar, conteni
 
   // 6. KPI de todos los meses de la carga. Un fallo aquí no revierte la aceptación: se avisa.
   const kpi = await calcularYGuardarKpis(admin, { id: carga.id, empresa_id: carga.empresa_id });
+
+  // 7. Avisos (WhatsApp / correo) al contador y a founder/admin. Nunca interrumpen la aceptación.
+  await avisarResultadoCarga(admin, carga.id);
 
   return {
     estado: "aceptada",
