@@ -1,26 +1,26 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* Paleta del Grupo RJB (ver CLAUDE.md › Diseño). El rojo solo para alertas. */
+@theme {
+  --color-navy: #0a2342;
+  --color-azul: #0b5cad;
+  --color-turquesa: #179e8f;
+  --color-rojo: #c93a3a;
+  --color-gris-fondo: #f3f5f8;
+  --color-gris-texto: #5b6573;
+  --color-gris-borde: #dfe3e8;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  color-scheme: light;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-gris-fondo);
+  color: var(--color-navy);
+  font-family: var(--font-sans);
+  /* Cifras tabulares: las columnas de números quedan alineadas. */
+  font-feature-settings: "tnum" 1, "cv11" 1;
+  -webkit-font-smoothing: antialiased;
 }
