@@ -5,6 +5,8 @@ const nextConfig: NextConfig = {
   // renderizan de forma dinámica. Cache Components exigiría envolver cada
   // lectura de sesión en <Suspense>; no aporta valor en este sistema.
   cacheComponents: false,
+  // Los archivos .xlsx llegan por Server Action; el límite por defecto es 1 MB.
+  experimental: { serverActions: { bodySizeLimit: "25mb" } },
   turbopack: {
     rules: {
       "*.css": {
