@@ -77,7 +77,10 @@ export async function responderChat(p: {
     contenido: p.pregunta,
   });
 
-  const cliente = new Anthropic();
+  // Una clave de usuario (sk-ant-usr-…) no está ligada a un workspace: la API exige
+  // el header anthropic-workspace-id. Con una clave de workspace no hace falta.
+  const workspace = process.env.ANTHROPIC_WORKSPACE_ID;
+  const cliente = new Anthropic(workspace ? { defaultHeaders: { "anthropic-workspace-id": workspace } } : {});
   const mensajes: Anthropic.MessageParam[] = [...historial, { role: "user", content: p.pregunta }];
   const herramientasUsadas: string[] = [];
   const ctx = { supabase: p.supabase, usuarioId: p.usuario.id };
