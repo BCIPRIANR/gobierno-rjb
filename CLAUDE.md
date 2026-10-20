@@ -22,13 +22,49 @@ define KPI, fórmulas, metas y umbrales; eso se guarda como configuración (`kpi
 4. **La IA solo narra lo calculado.** Consulta `kpi_resultados` y vistas; nunca lee archivos crudos, nunca
    estima, nunca ve empresas fuera del permiso del usuario que pregunta. Si no hay dato, dice "N/D".
 5. **"Crea valor / destruye valor"** solo con criterio explícito (ROIC > WACC, EVA > 0).
-6. **No llamar EBITDA ni utilidad operacional** a ingresos − costos. Usar "Excedente entre ingresos y
-   costos/gastos". Recaudo − pagos = "Flujo neto de caja operativo".
+6. **No llamar EBITDA ni utilidad operacional** a ingresos − costos del informe mensual (TD). Usar
+   "Excedente entre ingresos y costos/gastos". Recaudo − pagos = "Flujo neto de caja operativo".
+   EBITDA, utilidad operacional y neta solo existen cuando vienen como líneas de los estados financieros
+   anuales (`EEFF_ANUAL`); ahí sí se usan con su nombre contable.
 
 ## Validación de cargas (sin aprobación manual)
 - Los checks automáticos son el filtro: archivo que no pasa → `rechazada` con motivo claro; pasa → `aceptada`.
 - El contador marca `caracter`: `preliminar` o `definitivo`. El Founder ve la etiqueta.
 - Re-subir crea una versión nueva; la anterior queda con `vigente = false`. Nada se borra.
+
+## Informe mensual para la Junta Directiva (feedback del analista, sept. 2026)
+Entregable principal del sistema: **2 páginas por empresa + 1 de resumen del Grupo**, legible en 5 minutos.
+Se arma con los mismos datos del tablero; el gerente solo escribe lo que los números no explican.
+- Secciones automáticas: (1) Resumen del mes — lo redacta la IA solo con KPI calculados y semáforos;
+  (2) Tablero de indicadores con semáforo contra meta; (3) Caja: recaudo vs **liquidez mínima requerida**
+  → excedente o déficit; (4) Cartera: edades (0–90, 91–180, 181–360, >360) y 5 mayores deudores con
+  cambio vs mes anterior; (5) Alertas del mes — todo indicador en amarillo o rojo, redactadas por la IA.
+- Bloques del gerente (texto editable): causas y acciones por alerta, hechos relevantes (máx. 5),
+  decisiones que se piden a la Junta, estado de compromisos anteriores.
+- El informe sale igual aunque el gerente no escriba: se marca "pendiente de comentario".
+- Calendario (días hábiles tras el cierre): día 5 carga · día 6 el sistema calcula y la IA genera el
+  borrador · día 8 el gerente completa y aprueba · día 9 revisión financiera · envío 3 días antes de la Junta.
+
+### Semáforo contra meta (regla única para todos los indicadores)
+| Estado | "Más es mejor" | "Menos es mejor" |
+|---|---|---|
+| Verde | ≥ meta | ≤ meta |
+| Amarillo | entre 90% y 99,9% de la meta | hasta 10% por encima de la meta |
+| Rojo | < 90% de la meta | > 10% por encima de la meta |
+| Sin meta (gris) | la meta no está cargada | la meta no está cargada |
+Excepciones: el flujo neto / excedente de caja es rojo siempre que sea negativo; días de proveedores se
+evalúa como rango (±10% de la meta). `sentido = neutro` no lleva semáforo. Las metas las define el
+analista en `metas` (por empresa, KPI y periodo); el sistema nunca las inventa.
+
+### Datos que el INFORMES MULTI no trae (formato por cerrar con el analista)
+- **Liquidez mínima requerida**: costos y gastos que se pagan sí o sí cada mes (nómina, arriendos,
+  servicios, proveedores críticos). Hasta que exista en el archivo → N/D.
+- **Cartera por edades** y **facturación mensual por proveedor** (archivo PROVEEDORES: NIT, días de
+  cartera, concepto, meses). Alerta de proveedor: desviación del mes vs promedio de 6 meses previos,
+  umbral ±20%, tipo "Superior" o "Inferior".
+- Tipos de archivo ya previstos en `tipos_archivo`: `CARTERA_EPS`, `PAGOS_PROVEEDOR`, `EEFF_ANUAL`.
+- La carga sigue siendo por el portal web (no por carpeta de Drive): la empresa se elige al subir, así
+  no hace falta la "columna Empresa" del formato del analista.
 
 ## Stack
 - Next.js (App Router, TypeScript estricto) + Tailwind
@@ -64,6 +100,7 @@ app/
   (app)/cargas/            portal del contador
   (app)/gestion/           Dashboard de Gestión mensual
   (app)/chat/              chat IA con sugerencias
+  (app)/informes/          borrador del informe de Junta por empresa (2 páginas, imprimible)
   (app)/admin/             usuarios, empresas, KPI
   api/whatsapp/webhook/    mensajes entrantes del Founder
   api/cron/recordatorios/  recordatorios diarios
@@ -71,8 +108,9 @@ lib/
   supabase/{client,server,admin}.ts
   parser/                  detección de secciones por texto + normalización
   checks/                  controles de integridad de cada carga
-  kpi/                     cálculo de KPI desde kpi_definiciones
-  ia/                      herramientas del chat, sugerencias, resumen gerencial
+  kpi/                     cálculo de KPI desde kpi_definiciones, comparaciones, semáforo contra meta
+  ia/                      herramientas del chat, sugerencias, resumen y alertas del informe de Junta
+  informes/                armado de datos del informe (puro) y persistencia en informes_junta
   notificaciones/{whatsapp,email}.ts
   formato.ts               formatos COP M, %, x, días
   auditoria.ts
@@ -116,13 +154,17 @@ tablero, filtros arriba, tarjetas KPI con valor, variación y mini tendencia, mu
 ## Comandos
 ```
 pnpm dev                 servidor local
-pnpm test                pruebas
+pnpm test                pruebas unitarias (puras)
+pnpm test:integracion    pruebas contra la base real (gerente demo; requiere .env.local)
 pnpm lint
 supabase db push         aplicar migraciones
 supabase gen types typescript --linked > lib/supabase/tipos.ts
 ```
 
 ## Estado actual
-Demo de fin de semana. Alcance: login + roles, portal de carga, parser INFORMES MULTI + checks,
-Dashboard de Gestión mensual, semáforo de cargas, avisos WhatsApp/correo, chat IA con sugerencias.
+Hechos (bloques 1–6): login + roles, portal de carga con versionado, parser INFORMES MULTI + checks,
+KPI y Dashboard de Gestión, semáforo de cargas y avisos WhatsApp/correo, chat IA con sugerencias.
+Bloque 7: borrador del informe de Junta por empresa (resumen y alertas por IA, tablero con semáforo,
+bloques del gerente, imprimible). Pendiente con el analista: formato del mes con liquidez mínima y
+cartera por edades, parser de proveedores con alerta ±20%, metas mensuales, resumen del Grupo.
 Fuera del demo: MFA obligatorio, tableros anuales, pruebas de penetración, despliegue a las 7 empresas.
