@@ -45,13 +45,17 @@ const gerente = credencialesGerente();
 const activa = Boolean(env.NEXT_PUBLIC_SUPABASE_URL && env.NEXT_PUBLIC_SUPABASE_ANON_KEY && gerente);
 
 describe.skipIf(!activa)("herramientas del chat bajo RLS (gerente demo)", () => {
+  // Un solo inicio de sesión para toda la suite (evita límites de tasa de Auth).
+  let ctx: { supabase: ReturnType<typeof createClient<Database>>; usuarioId: string } | null = null;
   async function contexto() {
+    if (ctx) return ctx;
     const supabase = createClient<Database>(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
       auth: { persistSession: false },
     });
     const { data, error } = await supabase.auth.signInWithPassword(gerente as { email: string; password: string });
     if (error || !data.user) throw new Error(`No se pudo iniciar sesión: ${error?.message}`);
-    return { supabase, usuarioId: data.user.id };
+    ctx = { supabase, usuarioId: data.user.id };
+    return ctx;
   }
 
   it("listar_empresas solo devuelve Empresa Demo", async () => {
@@ -67,7 +71,8 @@ describe.skipIf(!activa)("herramientas del chat bajo RLS (gerente demo)", () => 
     expect(r.es_demo).toBe(true);
     const kpis = r.kpis as { codigo: string; valor: string; estado: string; motivo_nd: string | null; meta: string }[];
     const ingresos = kpis.find((k) => k.codigo === "ingresos");
-    expect(ingresos).toMatchObject({ valor: "$7.675,9 M", estado: "real", meta: "Sin meta definida" });
+    // Empresa Demo tiene metas de demostración cargadas para julio (ingresos $8.000,0 M).
+    expect(ingresos).toMatchObject({ valor: "$7.675,9 M", estado: "real", meta: "$8.000,0 M" });
     const recaudo = kpis.find((k) => k.codigo === "recaudo_total");
     expect(recaudo?.valor).toBe("N/D");
     expect(recaudo?.motivo_nd).toContain("medio de pago");

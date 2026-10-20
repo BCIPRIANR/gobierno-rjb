@@ -24,3 +24,32 @@ body {
   font-feature-settings: "tnum" 1, "cv11" 1;
   -webkit-font-smoothing: antialiased;
 }
+
+/* Informe de Junta: impresión a PDF (2 páginas por empresa). */
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+  body {
+    background: #fff;
+  }
+  body > header,
+  body > footer,
+  nav {
+    display: none !important;
+  }
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  .informe .pagina {
+    break-after: page;
+  }
+  .informe .pagina:last-child {
+    break-after: auto;
+  }
+  textarea {
+    resize: none;
+  }
+}

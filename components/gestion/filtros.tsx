@@ -13,19 +13,22 @@ export function FiltrosGestion({
   empresaSlug,
   periodos,
   periodo,
+  ruta = "/gestion",
 }: {
   empresas: Empresa[];
   empresaSlug: string;
   /** `YYYY-MM-01`, de más reciente a más antiguo. */
   periodos: string[];
   periodo: string | null;
+  /** Ruta destino al cambiar los filtros (por defecto /gestion). */
+  ruta?: string;
 }) {
   const router = useRouter();
 
   function navegar(slug: string, mes: string | null) {
     const params = new URLSearchParams({ empresa: slug });
     if (mes) params.set("mes", mes.slice(0, 7));
-    router.push(`/gestion?${params.toString()}`);
+    router.push(`${ruta}?${params.toString()}`);
   }
 
   return (

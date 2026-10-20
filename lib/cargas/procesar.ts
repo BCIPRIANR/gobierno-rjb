@@ -8,6 +8,7 @@ import type { ResultadoCheck } from "@/lib/checks/tipos";
 import type { Hecho } from "@/lib/parser/tipos";
 import { calcularYGuardarKpis } from "@/lib/kpi/guardar";
 import { avisarResultadoCarga } from "@/lib/notificaciones/eventos";
+import { generarInformeJunta } from "@/lib/informes/generar";
 
 type Admin = SupabaseClient<Database>;
 
@@ -110,6 +111,15 @@ export async function procesarCarga(admin: Admin, carga: CargaAProcesar, conteni
 
   // 7. Avisos (WhatsApp / correo) al contador y a founder/admin. Nunca interrumpen la aceptación.
   await avisarResultadoCarga(admin, carga.id);
+
+  // 8. Borrador del informe de Junta del periodo declarado (día 6 del calendario del analista).
+  if (kpi.ok) {
+    try {
+      await generarInformeJunta(admin, { empresaId: carga.empresa_id, periodo: carga.periodo, generadoPor: null, avisar: true });
+    } catch (e) {
+      console.error("[informes] no se pudo generar el borrador", e instanceof Error ? e.message : e);
+    }
+  }
 
   return {
     estado: "aceptada",

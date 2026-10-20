@@ -5,6 +5,8 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["tests/**/*.test.ts"],
+    // Las pruebas contra la base real van aparte: pnpm test:integracion
+    exclude: ["tests/integracion/**", "node_modules/**"],
     testTimeout: 30_000,
   },
   resolve: {

@@ -290,6 +290,88 @@ export type Database = {
           },
         ]
       }
+      informes_junta: {
+        Row: {
+          actualizado_en: string
+          alertas_ia: Json
+          aprobado_en: string | null
+          aprobado_por: string | null
+          causas_acciones: string | null
+          compromisos: string | null
+          datos: Json
+          decisiones_junta: string | null
+          empresa_id: string
+          estado: Database["public"]["Enums"]["estado_informe"]
+          generado_en: string
+          generado_por: string | null
+          hechos_relevantes: string | null
+          id: string
+          modelo_ia: string | null
+          periodo: string
+          resumen_ia: string | null
+        }
+        Insert: {
+          actualizado_en?: string
+          alertas_ia?: Json
+          aprobado_en?: string | null
+          aprobado_por?: string | null
+          causas_acciones?: string | null
+          compromisos?: string | null
+          datos?: Json
+          decisiones_junta?: string | null
+          empresa_id: string
+          estado?: Database["public"]["Enums"]["estado_informe"]
+          generado_en?: string
+          generado_por?: string | null
+          hechos_relevantes?: string | null
+          id?: string
+          modelo_ia?: string | null
+          periodo: string
+          resumen_ia?: string | null
+        }
+        Update: {
+          actualizado_en?: string
+          alertas_ia?: Json
+          aprobado_en?: string | null
+          aprobado_por?: string | null
+          causas_acciones?: string | null
+          compromisos?: string | null
+          datos?: Json
+          decisiones_junta?: string | null
+          empresa_id?: string
+          estado?: Database["public"]["Enums"]["estado_informe"]
+          generado_en?: string
+          generado_por?: string | null
+          hechos_relevantes?: string | null
+          id?: string
+          modelo_ia?: string | null
+          periodo?: string
+          resumen_ia?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "informes_junta_aprobado_por_fkey"
+            columns: ["aprobado_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "informes_junta_empresa_id_fkey"
+            columns: ["empresa_id"]
+            isOneToOne: false
+            referencedRelation: "empresas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "informes_junta_generado_por_fkey"
+            columns: ["generado_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       kpi_definiciones: {
         Row: {
           activo: boolean
@@ -657,6 +739,7 @@ export type Database = {
       caracter_carga: "preliminar" | "definitivo"
       estado_carga: "procesando" | "aceptada" | "rechazada"
       estado_dato: "real" | "calculado" | "meta" | "nd"
+      estado_informe: "borrador" | "aprobado"
       periodicidad: "mensual" | "anual"
       rol_usuario: "founder" | "admin" | "gerente" | "contador"
     }
@@ -792,6 +875,7 @@ export const Constants = {
       caracter_carga: ["preliminar", "definitivo"],
       estado_carga: ["procesando", "aceptada", "rechazada"],
       estado_dato: ["real", "calculado", "meta", "nd"],
+      estado_informe: ["borrador", "aprobado"],
       periodicidad: ["mensual", "anual"],
       rol_usuario: ["founder", "admin", "gerente", "contador"],
     },

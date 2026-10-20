@@ -8,6 +8,8 @@ import {
   type UnidadKpi,
 } from "@/lib/formato";
 import { MiniTendencia } from "./graficos";
+import { evaluarSemaforo } from "@/lib/kpi/semaforo";
+import { ESTADO_TEXTO, PuntoSemaforo } from "@/components/informes/semaforo";
 
 export type Sentido = "mayor_mejor" | "menor_mejor" | "neutro";
 export type EstadoDato = "real" | "calculado" | "meta" | "nd";
@@ -93,6 +95,7 @@ export function TarjetaKpi({ d }: { d: DatosTarjeta }) {
         ) : null}
         <dt className="text-gris-texto">Meta</dt>
         <dd className="text-right tabular-nums text-navy">{textoMeta(d)}</dd>
+        {semaforoDe(d)}
       </dl>
     </article>
   );
@@ -108,6 +111,21 @@ function textoAcumulado(a: Acumulado, unidad: UnidadKpi): string {
     case "nd":
       return "N/D";
   }
+}
+
+/** Semáforo contra meta (regla del analista). Solo se muestra cuando hay meta o el KPI es rojo por signo. */
+function semaforoDe(d: DatosTarjeta) {
+  const s = evaluarSemaforo({ codigo: d.codigo, valor: d.estado === "nd" ? null : d.valor, meta: d.meta, sentido: d.sentido });
+  if (s.color === "sin_meta" || s.color === "nd" || s.color === "sin_semaforo") return null;
+  return (
+    <>
+      <dt className="text-gris-texto">Semáforo</dt>
+      <dd className="flex items-center justify-end gap-1.5 text-navy" title={s.motivo}>
+        <PuntoSemaforo color={s.color} />
+        {ESTADO_TEXTO[s.color]}
+      </dd>
+    </>
+  );
 }
 
 function textoMeta(d: DatosTarjeta): string {
