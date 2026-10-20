@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { empresasDelUsuario, requerirRol } from "@/lib/auth";
 import { crearClienteServidor } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/tipos";
@@ -64,7 +65,12 @@ export default async function PaginaInformes({ searchParams }: { searchParams: P
       <div className="flex flex-wrap items-start justify-between gap-4 print:hidden">
         <div>
           <h2 className="text-2xl font-semibold text-navy">Informe mensual para la Junta</h2>
-          <p className="mt-1 text-sm text-gris-texto">Dos páginas por empresa. Las secciones 1 a 5 las arma el sistema; las 6 a 9 las escribe el gerente.</p>
+          <p className="mt-1 text-sm text-gris-texto">
+            Dos páginas por empresa. Las secciones 1 a 5 las arma el sistema; las 6 a 9 las escribe el gerente.{" "}
+            <Link href={`/informes/grupo${periodo ? `?mes=${periodo.slice(0, 7)}` : ""}`} className="font-medium text-azul hover:underline">
+              Ver resumen del Grupo →
+            </Link>
+          </p>
         </div>
         <FiltrosGestion empresas={empresas} empresaSlug={empresa.slug} periodos={periodos} periodo={periodo} ruta="/informes" />
       </div>
