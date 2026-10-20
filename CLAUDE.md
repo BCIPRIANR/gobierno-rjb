@@ -164,7 +164,8 @@ supabase gen types typescript --linked > lib/supabase/tipos.ts
 ## Estado actual
 Hechos (bloques 1–6): login + roles, portal de carga con versionado, parser INFORMES MULTI + checks,
 KPI y Dashboard de Gestión, semáforo de cargas y avisos WhatsApp/correo, chat IA con sugerencias.
-Bloque 7: borrador del informe de Junta por empresa (resumen y alertas por IA, tablero con semáforo,
-bloques del gerente, imprimible). Pendiente con el analista: formato del mes con liquidez mínima y
-cartera por edades, parser de proveedores con alerta ±20%, metas mensuales, resumen del Grupo.
+Bloque 7: informe de Junta por empresa (resumen y alertas por IA, tablero con semáforo, bloques del
+gerente, aprobación, imprimible) + resumen del Grupo. Archivo PROVEEDORES (`PAGOS_PROVEEDOR`): parser,
+checks y alerta ±20% vs promedio de 6 meses en /gestion. Pendiente con el analista: formato del mes
+con liquidez mínima y cartera por edades, metas reales (hoy solo hay metas de demostración en Empresa Demo).
 Fuera del demo: MFA obligatorio, tableros anuales, pruebas de penetración, despliegue a las 7 empresas.

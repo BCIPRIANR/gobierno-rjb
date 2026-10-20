@@ -4,6 +4,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/tipos";
 import { parsearInformesMulti } from "@/lib/parser/informes-multi";
 import { evaluarInformesMulti } from "@/lib/checks/informes-multi";
+import { parsearProveedores } from "@/lib/parser/proveedores";
+import { evaluarProveedores } from "@/lib/checks/proveedores";
 import type { ResultadoCheck } from "@/lib/checks/tipos";
 import type { Hecho } from "@/lib/parser/tipos";
 import { calcularYGuardarKpis } from "@/lib/kpi/guardar";
@@ -34,6 +36,9 @@ const TAMANO_LOTE = 500;
  * INFORME_MENSUAL tiene revisión automática por ahora.
  */
 export async function procesarCarga(admin: Admin, carga: CargaAProcesar, contenido: Uint8Array): Promise<ResultadoProceso> {
+  if (carga.tipo_archivo === "PAGOS_PROVEEDOR") {
+    return procesarProveedores(admin, carga, contenido);
+  }
   if (carga.tipo_archivo !== "INFORME_MENSUAL") {
     const checks: ResultadoCheck[] = [
       { codigo: "sin_revision", ok: true, nivel: "aviso", mensaje: "Este tipo de archivo todavía no tiene revisión automática." },
@@ -140,8 +145,84 @@ async function rechazar(admin: Admin, cargaId: string, motivo: string, checks: R
   if (error) console.error("[cargas] fallo al marcar rechazada", error.code);
 }
 
-/** NIT → tercero_id. Crea los terceros que no existan (tipo 'otro'; el analista lo afina después). */
-async function resolverTerceros(admin: Admin, hechos: Hecho[]): Promise<Map<string, string> | null> {
+/**
+ * Archivo PROVEEDORES (tipo PAGOS_PROVEEDOR): facturación mensual por proveedor con NIT.
+ * Genera hechos `pagos` con el periodo de cada columna (puede abarcar varios años) y
+ * enlaza terceros tipo 'proveedor'. No recalcula KPI ni genera informe: alimenta la
+ * alerta de facturación (±20% vs promedio de 6 meses) y el cruce entre empresas.
+ */
+async function procesarProveedores(admin: Admin, carga: CargaAProcesar, contenido: Uint8Array): Promise<ResultadoProceso> {
+  const { data: empresa } = await admin.from("empresas").select("nombre").eq("id", carga.empresa_id).maybeSingle();
+
+  let parser;
+  try {
+    parser = parsearProveedores(contenido);
+  } catch (e) {
+    const motivo = `No se pudo leer el archivo como libro de Excel (${e instanceof Error ? e.message : "error desconocido"}). Guárdalo de nuevo como .xlsx e intenta otra vez.`;
+    await rechazar(admin, carga.id, motivo, [{ codigo: "archivo_legible", ok: false, nivel: "error", mensaje: motivo }]);
+    await avisarResultadoCarga(admin, carga.id);
+    return { estado: "rechazada", motivo };
+  }
+
+  const evaluacion = evaluarProveedores(parser, carga.periodo, empresa?.nombre ?? "");
+  if (evaluacion.estado === "rechazada") {
+    await rechazar(admin, carga.id, evaluacion.motivoRechazo ?? "Rechazada por los controles automáticos.", evaluacion.checks);
+    await avisarResultadoCarga(admin, carga.id);
+    return { estado: "rechazada", motivo: evaluacion.motivoRechazo ?? "" };
+  }
+
+  const terceros = await resolverTerceros(admin, parser.hechos, "proveedor");
+  if (terceros === null) {
+    return { estado: "error", mensaje: "No se pudieron registrar los proveedores (NIT). Intenta de nuevo en un momento." };
+  }
+
+  const filas = parser.hechos.map((h) => ({
+    carga_id: carga.id,
+    empresa_id: carga.empresa_id,
+    periodo: h.periodo,
+    seccion: h.seccion,
+    concepto: h.concepto,
+    tercero_id: h.nit ? (terceros.get(h.nit) ?? null) : null,
+    valor: h.valor,
+    unidad: h.unidad,
+    hoja_origen: h.hoja_origen,
+    fila_origen: h.fila_origen,
+    columna_origen: h.columna_origen,
+  }));
+  for (let i = 0; i < filas.length; i += TAMANO_LOTE) {
+    const { error } = await admin.from("hechos_financieros").insert(filas.slice(i, i + TAMANO_LOTE));
+    if (error) {
+      console.error("[cargas] fallo al guardar hechos de proveedores", error.code);
+      await admin.from("hechos_financieros").delete().eq("carga_id", carga.id);
+      return { estado: "error", mensaje: "No se pudieron guardar los datos del archivo. Intenta de nuevo en un momento." };
+    }
+  }
+
+  await marcarAnterioresNoVigentes(admin, carga);
+  const { error: errorEstado } = await admin
+    .from("cargas")
+    .update({ estado: "aceptada", resultado_checks: evaluacion.checks, motivo_rechazo: null })
+    .eq("id", carga.id);
+  if (errorEstado) {
+    console.error("[cargas] fallo al marcar aceptada (proveedores)", errorEstado.code);
+    await admin.from("hechos_financieros").delete().eq("carga_id", carga.id);
+    return { estado: "error", mensaje: "No se pudo actualizar el estado de la carga. Intenta de nuevo." };
+  }
+  await avisarResultadoCarga(admin, carga.id);
+
+  return {
+    estado: "aceptada",
+    hechos: filas.length,
+    avisos: evaluacion.checks.filter((c) => c.nivel === "aviso").length,
+    ultimoMes: evaluacion.ultimoMesDatos,
+    kpis: 0,
+    kpisNd: 0,
+    avisoKpi: null,
+  };
+}
+
+/** NIT → tercero_id. Crea los terceros que no existan con el tipo indicado (el analista lo afina después). */
+async function resolverTerceros(admin: Admin, hechos: Hecho[], tipo: "otro" | "proveedor" | "eps" = "otro"): Promise<Map<string, string> | null> {
   const porNit = new Map<string, string>();
   for (const h of hechos) {
     if (h.nit && !porNit.has(h.nit)) porNit.set(h.nit, h.concepto);
@@ -149,7 +230,7 @@ async function resolverTerceros(admin: Admin, hechos: Hecho[]): Promise<Map<stri
   const mapa = new Map<string, string>();
   if (porNit.size === 0) return mapa;
 
-  const nuevos = [...porNit].map(([nit, razon_social]) => ({ nit, razon_social, tipo: "otro" }));
+  const nuevos = [...porNit].map(([nit, razon_social]) => ({ nit, razon_social, tipo }));
   const { error: errorUpsert } = await admin.from("terceros").upsert(nuevos, { onConflict: "nit", ignoreDuplicates: true });
   if (errorUpsert) {
     console.error("[cargas] fallo al crear terceros", errorUpsert.code);

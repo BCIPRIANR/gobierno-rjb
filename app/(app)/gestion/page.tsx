@@ -9,6 +9,7 @@ import { FiltrosGestion } from "@/components/gestion/filtros";
 import { TarjetaKpi, type DatosTarjeta, type Sentido } from "@/components/gestion/tarjeta-kpi";
 import { GraficoBarrasPareadas, GraficoBarrasSigno, GraficoLinea, type PuntoMes } from "@/components/gestion/graficos";
 import { Top5, top } from "@/components/gestion/top5";
+import { AlertasProveedores } from "@/components/gestion/alertas-proveedores";
 
 export const metadata: Metadata = { title: "Gestión" };
 
@@ -210,6 +211,8 @@ export default async function PaginaGestion({ searchParams }: PageProps<"/gestio
         <Top5 titulo={`Top 5 entidades por cartera · ${NOMBRE_MES[mesActual]}`} {...top(porSeccion("cartera"))} vacio="Sin cartera registrada este mes." />
         <Top5 titulo={`Top categorías de gasto · ${NOMBRE_MES[mesActual]}`} {...top(porSeccion("costos_gastos"))} vacio="Sin costos y gastos registrados este mes." />
       </section>
+
+      <AlertasProveedores empresaId={empresa.id} periodo={periodo} />
 
       <p className="text-xs text-gris-texto">
         Estado del dato: <b>Real</b> viene del archivo · <b>Calculado</b> se deriva de valores reales · <b>Meta</b> la define el analista · <b>N/D</b> falta un dato y no se estima.

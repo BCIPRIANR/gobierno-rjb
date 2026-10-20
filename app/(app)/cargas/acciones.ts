@@ -142,7 +142,9 @@ export async function subirArchivo(_anterior: EstadoSubida, formData: FormData):
       const reemplazo = version > 1 ? ` Reemplaza a la versión ${version - 1}.` : "";
       const kpis = resultado.avisoKpi
         ? ` ${resultado.avisoKpi}`
-        : ` KPI calculados: ${resultado.kpis}${resultado.kpisNd > 0 ? ` (${resultado.kpisNd} en N/D por datos faltantes)` : ""}.`;
+        : resultado.kpis > 0
+          ? ` KPI calculados: ${resultado.kpis}${resultado.kpisNd > 0 ? ` (${resultado.kpisNd} en N/D por datos faltantes)` : ""}.`
+          : "";
       return {
         tipo: "exito",
         mensaje: `Archivo aceptado: ${resultado.hechos.toLocaleString("es-CO")} valores registrados${mes ? `, datos hasta ${mes}` : ""}.${reemplazo}${kpis}${avisos}`,
